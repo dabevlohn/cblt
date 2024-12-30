@@ -134,13 +134,34 @@ where
                                 let header_len =
                                     get_header_len(&mut backend_stream, &mut backend_buf).await?;
 
+                                // Parse backend headers for cookies and set client cookies according to
+                                // cookie map
+                                let mut buf_chains: Vec<&str> = std::str::from_utf8(&backend_buf)
+                                    .unwrap()
+                                    .split("\r\n")
+                                    .collect();
+                                if options.cookie_map.is_empty() {
+                                } else {
+                                    // Parse cookie_map string
+                                    // "client_cookie1=backend_cookie1;client_cookie2=backend_cookie2"
+                                    for cm in options.cookie_map.split(";") {
+                                        let cb: Vec<&str> = cm.split("=").into_iter().collect();
+                                        debug!("Cookie map: {:?}", cb[0]);
+                                    }
+                                    buf_chains.retain(|&x| !x.is_empty());
+                                    buf_chains.push("set-cookie: options=cookie_map\r\n\r\n");
+                                }
+                                debug!("Backend headers buf: {:?}", buf_chains);
+
                                 // Send the response headers back to the client
-                                socket.write_all(&backend_buf[..header_len]).await.map_err(
-                                    |e| CbltError::ResponseError {
+                                //socket.write_all(&backend_buf[..header_len]).await.map_err(
+                                socket
+                                    .write_all(&buf_chains.join("\r\n").as_bytes())
+                                    .await
+                                    .map_err(|e| CbltError::ResponseError {
                                         details: e.to_string(),
                                         status_code: StatusCode::BAD_GATEWAY,
-                                    },
-                                )?;
+                                    })?;
 
                                 // If there's any body data already read, send it
                                 if backend_buf.len() > header_len {
@@ -260,6 +281,17 @@ where
 
         match res.parse(buf) {
             Ok(httparse::Status::Complete(header_len)) => {
+                // Getting backend cookies
+                let mut hdrs = res.headers.iter();
+                while let Some(h) = hdrs.next() {
+                    match h.name.to_string().as_str() {
+                        "set-cookie" => {
+                            debug!("Backend send a cookie: {:?}", h.value);
+                            break;
+                        }
+                        _ => {}
+                    };
+                }
                 return Ok(header_len);
             }
             Ok(httparse::Status::Partial) => {

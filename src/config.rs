@@ -48,6 +48,7 @@ pub struct ReverseProxyOptions {
     pub lb_interval: u64,
     pub lb_timeout: u64,
     pub lb_policy: Option<LoadBalancePolicy>,
+    pub cookie_map: String,
 }
 
 #[cfg_attr(feature = "trace", instrument(level = "trace", skip_all))]
@@ -184,6 +185,7 @@ fn parse_reverse_proxy_options(node: &KdlNode) -> Result<ReverseProxyOptions, Cb
         lb_interval: 60,
         lb_timeout: 1,
         lb_policy: Some(LoadBalancePolicy::RoundRobin),
+        cookie_map: "".to_string(),
     };
 
     if let Some(children) = node.children() {
@@ -230,6 +232,14 @@ fn parse_reverse_proxy_options(node: &KdlNode) -> Result<ReverseProxyOptions, Cb
                                 });
                             }
                         }
+                    }
+                }
+                "cookie_map" => {
+                    let args = get_string_args(child);
+                    if let Some(cookie_map) = args.first() {
+                        options.cookie_map = cookie_map.to_string();
+                    } else {
+                        options.cookie_map = "".to_string();
                     }
                 }
                 _ => {
@@ -405,11 +415,14 @@ pub async fn load_servers_from_docker(_args: Arc<Args>) -> Result<HashMap<u16, S
                         2 // Default value
                     };
 
+                    let cookie_map = "".to_string();
+
                     let options = ReverseProxyOptions {
                         lb_retries,
                         lb_interval,
                         lb_timeout,
                         lb_policy,
+                        cookie_map,
                     };
 
                     // Build the ReverseProxy directive
