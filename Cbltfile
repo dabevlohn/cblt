@@ -4,6 +4,6 @@
 }
 "*:8083" {
     reverse_proxy "/*" "http://127.0.0.1:8082/" {
-      cookie_map "x-user=x-auth-request-user;x-email=x-auth-request-email"
+      cookie_map "x-user=x-auth-request-user;x-email=x-auth-request-email;x-text=text"
     }
 }
