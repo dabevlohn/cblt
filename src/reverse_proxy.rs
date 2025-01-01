@@ -173,20 +173,23 @@ where
                                 // Parse cookie_map string
                                 // "client_cookie1=backend_cookie1;client_cookie2=backend_cookie2"
 
-                                let mut setcookie = Vec::new();
-                                setcookie.push("set-cookie: ".to_string());
+                                let mut mapped_cookies: Vec<String> = Vec::new();
                                 for cm in options.cookie_map.split(";") {
                                     let cb: Vec<&str> = cm.split("=").into_iter().collect();
-                                    match backmap.get(cb[1]) {
-                                        Some(v) => {
-                                            // add value of backend cookie to client cookie
-                                            setcookie.push(format!("{}={};", cb[0], v));
+                                    if cb.len() > 1 {
+                                        match backmap.get(cb[1]) {
+                                            Some(v) => {
+                                                // add value of backend cookie to client cookie
+                                                mapped_cookies
+                                                    .push(format!("set-cookie: {}={};", cb[0], v));
+                                            }
+                                            _ => {}
                                         }
-                                        _ => {}
                                     }
                                 }
-                                let clong = setcookie.concat(); // to own string
-                                buf_chains.push(&clong);
+                                debug!("mapped_cookies: {:?}", mapped_cookies);
+                                // TODO add Vec<String> mapped_cookies to Vec<&str> buf_chains
+                                let _ = mapped_cookies.iter().map(|x| buf_chains.push(&x));
                                 buf_chains.push("\r\n"); // to separate headers from body
 
                                 // Send the response headers back to the client
