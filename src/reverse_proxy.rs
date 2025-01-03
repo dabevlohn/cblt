@@ -145,27 +145,21 @@ where
                                 let mut backmap: HashMap<String, String> = HashMap::new();
                                 for bm in buf_chains.iter() {
                                     if bm.contains("set-cookie: ") {
-                                        let bc: Vec<&str> = bm.split(": ").into_iter().collect();
+                                        let bc: Vec<&str> = bm.split(": ").collect();
                                         if bc[1].contains(";") {
-                                            let bc1: Vec<&str> =
-                                                bc[1].split(";").into_iter().collect();
+                                            let bc1: Vec<&str> = bc[1].split(";").collect();
                                             for bc2 in bc1.iter() {
                                                 if bc2.contains("=") {
-                                                    let bc3: Vec<&str> =
-                                                        bc2.split("=").into_iter().collect();
+                                                    let bc3: Vec<&str> = bc2.split("=").collect();
                                                     backmap.insert(
                                                         bc3[0].to_string(),
                                                         bc3[1].to_string(),
                                                     );
                                                 }
                                             }
-                                        } else {
-                                            if bc[1].contains("=") {
-                                                let bc3: Vec<&str> =
-                                                    bc[1].split("=").into_iter().collect();
-                                                backmap
-                                                    .insert(bc3[0].to_string(), bc3[1].to_string());
-                                            }
+                                        } else if bc[1].contains("=") {
+                                            let bc3: Vec<&str> = bc[1].split("=").collect();
+                                            backmap.insert(bc3[0].to_string(), bc3[1].to_string());
                                         }
                                     }
                                 }
@@ -175,27 +169,31 @@ where
 
                                 let mut mapped_cookies: Vec<String> = Vec::new();
                                 for cm in options.cookie_map.split(";") {
-                                    let cb: Vec<&str> = cm.split("=").into_iter().collect();
+                                    let cb: Vec<&str> = cm.split("=").collect();
                                     if cb.len() > 1 {
-                                        match backmap.get(cb[1]) {
-                                            Some(v) => {
-                                                // add value of backend cookie to client cookie
-                                                mapped_cookies
-                                                    .push(format!("set-cookie: {}={};", cb[0], v));
-                                            }
-                                            _ => {}
+                                        if let Some(v) = backmap.get(cb[1]) {
+                                            // add value of backend cookie to client cookie
+                                            mapped_cookies
+                                                .push(format!("set-cookie: {}={};", cb[0], v));
                                         }
                                     }
                                 }
                                 debug!("mapped_cookies: {:?}", mapped_cookies);
                                 // TODO add Vec<String> mapped_cookies to Vec<&str> buf_chains
-                                let _ = mapped_cookies.iter().map(|x| buf_chains.push(&x));
+                                for c in mapped_cookies.iter() {
+                                    buf_chains.push(c)
+                                }
                                 buf_chains.push("\r\n"); // to separate headers from body
 
+                                let buf_bytes_len = buf_chains.join("\r\n").as_bytes().len();
+                                debug!("buf_chains: {:?}", buf_chains);
+                                debug!("buf_chains length: {:?}", buf_bytes_len);
+                                debug!("header length: {:?}", header_len);
+
                                 // Send the response headers back to the client
-                                //socket.write_all(&backend_buf[..header_len]).await.map_err(
+                                // socket.write_all(&backend_buf[..header_len])
                                 socket
-                                    .write_all(&buf_chains.join("\r\n").as_bytes())
+                                    .write_all(&buf_chains.join("\r\n").as_bytes()[..buf_bytes_len])
                                     .await
                                     .map_err(|e| CbltError::ResponseError {
                                         details: e.to_string(),
@@ -203,7 +201,8 @@ where
                                     })?;
 
                                 // If there's any body data already read, send it
-                                if backend_buf.len() > header_len {
+                                // if backend_buf.len() > header_len {
+                                if backend_buf.len() > buf_bytes_len {
                                     socket.write_all(&backend_buf[header_len..]).await.map_err(
                                         |e| CbltError::ResponseError {
                                             details: e.to_string(),
@@ -317,20 +316,32 @@ where
         // Try to parse the response
         let mut headers = [httparse::EMPTY_HEADER; 64]; // Increased header capacity
         let mut res = httparse::Response::new(&mut headers);
+        // let new_header = httparse::Header {
+        //    name: "set-cookie",
+        //    value: b"cook10=10;",
+        // };
 
         match res.parse(buf) {
             Ok(httparse::Status::Complete(header_len)) => {
                 // Can get backend cookies properly here but can't set client cookies.
-                //let mut hdrs = res.headers.iter();
-                //while let Some(h) = hdrs.next() {
-                //    match h.name.to_string().as_str() {
-                //        "set-cookie" => {
-                //            debug!("Backend send a cookie: {:?}", h.value);
-                //            break;
-                //        }
-                //        _ => {}
-                //    };
-                //}
+                //
+                // headers[20] = new_header;
+                // let mut headers_str = "".to_string();
+                // let _hm: Vec<_> = headers
+                //     .into_iter()
+                //     .map(|x| {
+                //         if x.name.is_empty() {
+                //         } else {
+                //             headers_str += &format!(
+                //                 "{}: {}\r\n",
+                //                 x.name,
+                //                 std::str::from_utf8(x.value).unwrap()
+                //             )
+                //         }
+                //     })
+                //     .collect();
+                // debug!("Headers: {:?}", headers);
+                // debug!("Headers string: {}", headers_str);
                 return Ok(header_len);
             }
             Ok(httparse::Status::Partial) => {
