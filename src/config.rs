@@ -370,6 +370,7 @@ pub async fn load_servers_from_docker(_args: Arc<Args>) -> Result<HashMap<u16, S
                     let lb_interval_label = labels.get("cblt.lb_interval");
                     let lb_timeout_label = labels.get("cblt.lb_timeout");
                     let lb_retries_label = labels.get("cblt.lb_retries");
+                    let cookie_map_label = labels.get("cblt.cookie_map");
 
                     let lb_policy = if let Some(policy_str) = lb_policy_label {
                         match policy_str.as_str() {
@@ -415,7 +416,15 @@ pub async fn load_servers_from_docker(_args: Arc<Args>) -> Result<HashMap<u16, S
                         2 // Default value
                     };
 
-                    let cookie_map = "".to_string();
+                    let cookie_map = if let Some(cookiemap_str) = cookie_map_label {
+                        cookiemap_str.parse::<String>().map_err(|_| {
+                            CbltError::InvalidLabelFormat {
+                                details: "cblt.cookie_map".to_string(),
+                            }
+                        })?
+                    } else {
+                        "".to_string()
+                    };
 
                     let options = ReverseProxyOptions {
                         lb_retries,
